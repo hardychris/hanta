@@ -122,87 +122,111 @@ exp_summary <- function(metadata_loc = ''){
 }
 
 
-#' Run tsne
-#'
-#' Run tsne shiny
-#' @export
-#'
-tsne.shiny <- function(cluster_data = NULL,
-                       gm = NULL, gm_top = NULL, metadata = NULL, tsne_obj = NULL,
-                       app_loc = file.path(.libPaths(), "icell8", "shiny_apps", "tsne"), ...) {
+rounder <- function(number, rounding = F){
 
-  if(is.null(cluster_data) == FALSE){
+  lut <- c(1e-24, 1e-21, 1e-18, 1e-15, 1e-12, 1e-09, 1e-06, 0.001, 1, 1000,
+           1e+06, 1e+09, 1e+12, 1e+15, 1e+18, 1e+21, 1e+24)
 
-    gm <<- gm
-    gm_top <<- gm_top
-    metadata <<- metadata
-    tsne_obj <<- tsne_obj
-    p_default <<- tsne_obj$perplexity
+  pre <- c("y", "z", "a", "f", "p", "n", "u", "m", "", "K", "M", "G", "T", "P",
+           "E", "Z", "Y")
 
-  } else {
+  ix <- findInterval(number, lut)
 
-    gm <<- cluster_data$gm
-    gm_top <<- cluster_data$gms_top_genes
-    metadata <<- cluster_data$metadata
-    tsne_obj <<- cluster_data$tsne
-    p_default <<- tsne_obj$perplexity
+  if(lut[ix] != 1){
+
+    if(rounding == T){
+
+      out <- paste(sprintf("%.2f", round(number/lut[ix])), pre[ix], sep = "")
+
+    } else {
+
+      out <- paste(sprintf("%.2f", number/lut[ix]), pre[ix], sep = "")
+
+    }
 
   }
 
-  shiny::runApp(appDir = app_loc, ...)
+  else {
+
+    out <- as.character(number)
+
+  }
+
+  return(out)
+
+}
+
+
+is.empty <- function(x){
+
+  if(is.null(x) == TRUE){
+
+    return(TRUE)
+
+  } else if(is.na(x) == TRUE){
+
+    return(TRUE)
+
+  } else if(x == ""){
+
+    return(TRUE)
+
+  } else {
+
+    return(FALSE)
+
+  }
+
+}
+
+
+#' Takara Color Palette
+#'
+#' This function suppresses output when loading libraries.
+#' @param n Select number of colors (up to 20). Defaults to 20
+#' @param alpha Enter transparency from 0.0 - 1.0. Defaults to 1.
+#' @keywords General utility
+#'
+
+takara_col <- function(n = 20, alpha = 1){
+
+  if(n > 20){
+
+    stop("Only 20 avaiable colors from Takara Palette")
+
+  }
+
+  col_t <- c("#1C82E0", "#6E0082", "#DF1A22", "#5C5D60", "#E4E4E4", "#009EFF",
+             "#7CC400", "#FFD015", "#FF6103", "#04008A", "#42135D", "#B075D9",
+             "#005A79", "#24A53B", "#4B7321", "#6685DB", "#970062", "#BF1E2D",
+             "#A70000", "#DD009D")
+
+  col_t <- sapply(col_t, function(x) {hanta:::add.alpha(x, alpha = alpha)})
+
+  names(col_t) <- c("takara_blue", "clontech_purple", "cellartis_red", "gray",
+                    "light_gray", "light_blue", "lime_green", "yellow",
+                    "orange", "dk_blue", "dk_purple", "lavender", "teal",
+                    "grass_green", "olive", "periwinkle", "magenta",
+                    "classic_red", "dk_red", "pink")
+
+  col_t <- col_t[1:n]
+
+  return(col_t)
 
 }
 
 add.alpha <- function(col, alpha = 0.5){
+
   if(missing(col))
-    stop("Please provide a vector of colours.")
+
+    stop("Please provide a vector of colors")
+
   apply(sapply(col, col2rgb)/255, 2, function(x) {
+
     rgb(x[1], x[2], x[3], alpha = alpha)
+
   })
-}
-
-
-rounder <- function(number, rounding = F){
-
-  lut <- c(1e-24, 1e-21, 1e-18, 1e-15, 1e-12, 1e-09, 1e-06,
-           0.001, 1, 1000, 1e+06, 1e+09, 1e+12, 1e+15, 1e+18, 1e+21,
-           1e+24)
-
-  pre <- c("y", "z", "a", "f", "p", "n", "u", "m", "", "K",
-           "M", "G", "T", "P", "E", "Z", "Y")
-
-  ix <- findInterval(number, lut)
-
-  print(lut[ix])
-
-  if(lut[ix] != 1){
-    if(rounding == T){
-      out <- paste(sprintf("%.2f", round(number/lut[ix])), pre[ix], sep = "")
-    } else {
-      out <- paste(sprintf("%.2f", number/lut[ix]), pre[ix], sep = "")
-    }
-  }
-  else {
-    out <- as.character(number)
-  }
-  return(out)
-}
-
-
-find.file <- function(){
-
-  list.files(path = "", pattern = "$pandoc^", recursive = TRUE, full.names= TRUE)
 
 }
-
-is.empty <- function(x){
-  if(is.null(x) == TRUE){return(TRUE)}
-  else if(is.na(x) == TRUE){return(TRUE)}
-  else if(x == ""){return(TRUE)}
-  else {return(FALSE)}
-}
-
-
-
 
 
