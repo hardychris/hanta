@@ -1,0 +1,395 @@
+---
+params:
+    set_title: "ICELL8 Analysis Report"
+    set_author: ""
+    data_dir: ""
+title: "`r params$set_title`"
+author: "`r params$set_author`"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    theme: cosmo
+---
+
+<!-- “default”,"lumen", “cosmo”, “spacelab”, “cerulean”, “flatly”,“yeti”, “paper”,  prob between lumen and cosmo-->
+<!-- R -e "rmarkdown::render('icell8_report.Rmd', params = list(set_title='ICELL8 Analysis Report', set_author='Christopher Hardy'))" -->
+
+```{r setup, include = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+
+```
+
+
+```{r takara_logo, echo = FALSE}
+
+htmltools::a(href = 'http://takarabio.com/',
+             target = "_blank",
+             htmltools::img(src = system.file(file.path("reports", "takara_bio.png"), package = "icell8"),
+                            alt = 'logo',
+                            style = 'position:absolute; width:225px; top:0; right:0; padding:10px;')
+)
+
+```
+
+<br><br>
+
+<br><br>
+
+***
+
+## Experimental Overview
+
+<br><br>
+
+```{r exp_overview, echo = FALSE, results = 'asis'}
+
+library(kableExtra)
+
+load(file.path(params$data_dir, "ICELL8_raw_data.rda"))
+
+metadata <- raw_data$metadata
+
+metadata_header <- raw_data$mts_headers
+
+sample_name <- paste0(lapply(metadata_header, function(x) x[which(x$Description == "Sample Name"), 2]), collapse = " | ")
+sample_description <- paste0(lapply(metadata_header, function(x) x[which(x$Description == "Sample Description"), 2]), collapse = " | ")
+total_reads <- sum(as.integer(lapply(metadata_header, function(x) x[which(x$Description == "Total Read Pairs"), 2])))
+valid_reads <- sum(as.integer(lapply(metadata_header, function(x) x[which(x$Description == "Valid Barcode Read Pairs"), 2])))
+fraction_valid = valid_reads / total_reads
+barcode_count = nrow(metadata)
+valid_reads_per_bc = valid_reads / barcode_count
+
+res = data.frame(
+  list(
+    `Sample Name` = sample_name,
+    `Sample Description` = sample_description,
+    `Total Reads` = paste(format(round(total_reads / 1e6, 2), nsmall = 2), "M", sep = " "),
+    `Valid Reads` = paste(format(round(valid_reads / 1e6, 2), nsmall = 2), "M", sep = " "),
+    `Fraction Valid` = format(round(fraction_valid, 2), nsmall = 2),
+    `# of Barcodes` = barcode_count,
+    `Valid Reads / Barcode` = paste(format(round(valid_reads_per_bc / 1e4, 2), nsmall = 2), "K", sep = " ")
+  ), check.names = FALSE
+)
+
+knitr::kable(t(res), "html") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"), full_width = TRUE) %>%
+  kableExtra::column_spec(1, bold = TRUE, width = "10em") %>%
+  kableExtra::column_spec(2, width = "10em")
+
+```
+
+<br><br>
+
+<br><br>
+
+***
+
+## Read Assignment Overview
+
+```{r read_assignment, echo = FALSE, results = 'asis'}
+
+library(kableExtra)
+
+# burdown chart
+
+load(file.path(params$data_dir, "ICELL8_raw_data.rda"))
+
+metadata <- raw_data$metadata
+
+metadata_header <- raw_data$mts_headers
+
+total_reads = sum(metadata$`Barcode Read Pairs`)
+
+bad_reads = Reduce(sum, lapply(metadata_header, function(x){
+              as.integer(x[which(metadata_header$Description == "Bad Read Pairs"), 2])
+            }))
+
+rc <- c(total_reads,
+        total_reads - bad_reads,
+        sum(metadata$`Barcode Read Pairs`),
+        sum(metadata$`Trimmed Read Pairs`),
+        sum(metadata$`NoContam Read Pairs`),
+        sum(metadata$`Aligned`),
+        sum(metadata$`Assigned`),
+        (sum(metadata$`Aligned`) - sum(metadata$`Assigned`)),
+        sum(metadata$`Ambiguity`),
+        sum(metadata$`MappingQuality`),
+        sum(metadata$`NoFeatures`)
+)
+
+res = data.frame(
+    `Read Count` = rc,
+    `% of Total Reads` = rc / total_reads,
+    check.names = FALSE
+)
+
+values = sapply(res$`%`, function(x) format(round(x * 100, 2), nsmall = 2))
+
+par(mar=c(7,4,2,0))
+col <- colorRampPalette(c(icell8:::add.alpha(c("dodgerblue3", "slateblue","firebrick3"))))
+sto.col = paste0(col(nrow(res)), "99")
+plot_t <- res$`% of Total Reads`
+names(plot_t) <- c("Total", "Good", "Valid", "Trimmed", "Non-Contaminated", "Aligned", "Assigned", "Unassigned", "Ambiguous", "Mapping Quality", "No Features")
+rownames(res) <- c("Total", "Good", "Valid", "Trimmed", "Non-Contaminated", "Aligned", "Assigned", "Unassigned", "Ambiguous", "Mapping Quality", "No Features")
+mp <- barplot(plot_t * 100,
+          ylab = "% of reads",
+          las = 2,
+          col = sto.col,
+          xlab = "",
+          xaxt = 'n')
+text(mp, -5, labels = names(plot_t)[1:11], srt = 45, adj = 1, xpd = TRUE, cex= 1)
+
+# burndown table
+
+res$`% of Total Reads` = values
+res$`Read Count` = prettyNum(res$`Read Count`, big.mark = ",")
+kableExtra::kable(res, "html") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"), full_width = TRUE) %>%
+  kableExtra::column_spec(1, bold = T, width = "10em", color = icell8:::add.alpha("black", 0.7)) %>%
+  kableExtra::column_spec(2, width = "8em", color = icell8:::add.alpha("black", 0.7)) %>%
+  kableExtra::column_spec(3, width = "8em", color = icell8:::add.alpha("black", 0.7))
+
+```
+
+<br><br>
+
+<br><br>
+
+***
+
+## Correlation Analysis
+
+### Heatmap
+
+```{r heatmap, echo = FALSE, results = 'asis', fig.height = 6.69, fig.width = 10.00, fig.align = "center"}
+
+load(file.path(params$data_dir, "ICELL8_correlation_data.rda"))
+
+icell8::cor.heatmap(cm = correlation_data$cm, metadata = correlation_data$metadata,
+                    cor_type = correlation_data$cor_type,
+                    grouping_var = correlation_data$grouping_var)
+
+```
+
+<br><br>
+
+<br><br>
+
+### Intragroup Correlation Boxplot
+
+```{r boxplot, echo = FALSE, results = 'asis', fig.height = 5.69, fig.width = 10.00, fig.align = "center"}
+
+load(file.path(params$data_dir, "ICELL8_correlation_data.rda"))
+
+icell8::cor.dist_boxplot(correlation_data$cor_dist$intracor_list,
+                         cor_type = correlation_data$cor_type)
+
+```
+
+<br><br>
+
+<br><br>
+
+***
+
+## Cluster Analysis
+
+### Principal Component Analysis (PCA)
+
+<br><br>
+
+```{r pca, echo = FALSE, results = 'asis', fig.height = 5.69, fig.width = 10.00, fig.align = "center"}
+
+load(file.path(params$data_dir, "ICELL8_cluster_data.rda"))
+
+icell8::pca.plot(pca_obj = cluster_data$pca, metadata = cluster_data$metadata,
+         grouping_var = cluster_data$grouping_var)
+
+```
+
+<br><br>
+
+<br><br>
+
+### Scree Plot
+
+```{r scree_plot, echo = FALSE, results = 'asis', fig.height = 5.69, fig.width = 10.00, fig.align = "center"}
+
+library(kableExtra)
+
+load(file.path(params$data_dir, "ICELL8_cluster_data.rda"))
+
+pca_obj <- cluster_data$pca
+gms_top_genes <- cluster_data$gms_top_genes
+
+var_t <- summary(pca_obj)$importance[2,]
+var_total <- (var_t[1:10] / sum(var_t)) * 100
+var_top10 <- (var_t[1:10] / sum(var_t[1:10])) * 100
+pcs <- seq(1, 10, 1)
+
+col<- colorRampPalette(c(icell8:::add.alpha(c("dodgerblue3", "slateblue","firebrick3"))))
+sto.col = paste0(col(3), "99")
+plot(pcs, var_top10, xlim = c(1, 10), ylim = c(0, ceiling(max(var_top10))),
+     ylab = "% of variance", xlab = "principal components", pch = 19, col = sto.col[1],
+     main = "Scree Plot", font.main = 3)
+lines(pcs, var_top10, col = sto.col[1], lwd = 5)
+points(pcs, var_total, pch = 19, col = sto.col[3])
+lines(pcs, var_total, col = sto.col[3], lwd = 5)
+
+legend('topright', bty = 'n', col = c(sto.col[3], sto.col[1]), pch = 19, legend = c(expression("% Variance by PC"["TOTAL"]), expression("% Variance by PC"['1-10'])))
+# Here, there are only 500 PC's because we filter it before PCA, should be keep both lines?
+
+cor_pc_rd <- apply(pca_obj$x[,1:10], 2, function(j){
+  cor(j, colSums(gms_top_genes))
+})
+
+res <- data.frame(
+  `PC Variance` = format(round(summary(pca_obj)$importance[1,1:10], 2), nsmall = 2),
+  `% Variance by PCTOTAL` = format(round(var_total, 1), nsmall = 1),
+  `% Variance by PC1_10` = format(round(var_top10, 1), nsmall = 1),
+  `Correlation to Assigned Reads` = format(round(cor_pc_rd, 2), nsmall = 2),
+  check.names = FALSE
+)
+
+names(res) <- c('PC Variance', "% Variance by PC~TOTAL~", "% Variance by PC~1-10~", "Correlation w/ Assigned Reads (r)")
+
+kableExtra::kable(res, "html") %>%
+    kableExtra::kable_styling(bootstrap_options = c("striped", "hover"), full_width = T) %>%
+    kableExtra::column_spec(1, bold = T, width = "5em") %>%
+    kableExtra::column_spec(2, width = "8em") %>%
+    kableExtra::column_spec(3, width = "12em") %>%
+    kableExtra::column_spec(4, width = "12em") %>%
+    kableExtra::column_spec(5, width = "16em")
+
+```
+
+<br><br>
+
+<br><br>
+
+### Gene-wise Impact on Principal Components
+
+<br><br>
+
+```{r genewise_impact_pcs, echo = FALSE, results = 'asis'}
+
+library(kableExtra)
+
+load(file.path(params$data_dir, "ICELL8_cluster_data.rda"))
+
+rots <- round(cluster_data$pca$rotation[,1:5], 2)
+
+rots <- round(pca_obj$rotation[, 1:5], 2)
+
+res <- apply(rots, 2, function(x) {
+  
+  head(names(sort(abs(x), decreasing = T)), 10)
+  
+})
+
+kableExtra::kable(res, "html", caption = "Genes with Highest Impact on Principal Components 1-5") %>%
+  kableExtra::kable_styling(bootstrap_options = c("striped", "hover"), full_width = TRUE)
+
+```
+
+
+<br><br>
+
+<br><br>
+
+***
+
+### t-Distributed Stochastic Neighbor Embedding (t-SNE)
+
+<br><br>
+
+```{r tsne_app, echo = FALSE, results = 'asis', fig.height = 5.69, fig.width = 10.00, fig.align = "left"}
+
+load(file.path(params$data_dir, "ICELL8_cluster_data.rda"))
+
+icell8::tsne.plot(tsne_obj = cluster_data$tsne, metadata = cluster_data$metadata,
+          grouping_var = cluster_data$grouping_var)
+
+```
+
+<br><br>
+
+<br><br>
+
+***
+
+## Gene Expression Analysis
+
+<br><br>
+
+```{r gene_expression_analysis, echo = FALSE, results = 'asis'}
+
+library(kableExtra)
+
+# load qc data
+load(file.path(params$data_dir, "ICELL8_qc_data.rda"))
+
+load(file.path(params$data_dir, "ICELL8_correlation_data.rda"))
+grouping_var <- correlation_data$grouping_var
+rm(correlation_data)
+
+ge_analysis <- function(qc_data = NULL){
+  
+  res <- as.data.frame(t(apply(qc_data$gm[order(rowMeans(qc_data$gm), decreasing = T)[1:10], ], 1, function(x){
+  
+    c(mean(x), sd(x), median(x), min(x), max(x))
+  
+  })))
+
+  colnames(res) <- c("mean", "sd", "median", "min", "max")
+
+  res <- round(res, 2)
+
+  t <- kableExtra::kable(res, "html") %>%
+    kableExtra::kable_styling(bootstrap_options = c("striped", "hover"), full_width = TRUE) %>%
+    kableExtra::column_spec(1, bold = T, width = "5em") %>%
+    kableExtra::column_spec(2, width = "10em")
+  
+  cat(t)
+  
+}
+
+if(is.null(grouping_var) == TRUE){
+  
+  ge_analysis(qc_data)
+  
+} else {
+  
+  g = icell8:::gm.grouper(qc_data$metadata, grouping_var)
+  
+  if(length(levels(g$groups)) <= 10) {
+    
+    for(i in levels(g$groups)){
+      
+      gm <- qc_data$gm[, g$sort_order][, which(g$groups == i)]
+      
+      metadata <- qc_data$metadata[g$sort_order, ][which(g$groups == i), ]
+      
+      cat(paste0("### ", i, '\n'))
+      
+      ge_analysis(list(gm = gm, metadata = metadata))
+      
+      cat(paste0('\n'))
+    
+    }
+  
+  } else {
+      
+      ge_analysis(qc_data)
+    
+  }
+  
+}
+
+
+```
+
